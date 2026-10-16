@@ -265,9 +265,12 @@ class BakerNode(bpy.types.ShaderNodeCustomGroup):
         if self.target_type in ('IMAGE_TEX_UV', 'IMAGE_TEX_PLANE'):
             image_node = internal_tree.get_target_image_node(self, False)
             if image_node is not None:
-                layout.template_ID(image_node, "image",
-                                   new="image.new",
-                                   open="image.open")
+                row = layout.row(align=True)
+                row.operator("node.bkn_pick_image_node",
+                             text="", icon='EYEDROPPER')
+                row.template_ID(image_node, "image",
+                                new="image.new",
+                                open="image.open")
 
             if self.target_type == 'IMAGE_TEX_UV':
                 # UV map

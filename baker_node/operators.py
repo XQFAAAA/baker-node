@@ -249,6 +249,105 @@ class BKN_OT_refresh_preview(BakerNodeButtonBase, Operator):
         return {'FINISHED'}
 
 
+class BKN_OT_pick_image_node(BakerNodeButtonBase, Operator):
+    bl_idname = "node.bkn_pick_image_node"
+    bl_label = "Pick Image Node"
+    bl_description = ("Pick the Image Texture node to bake to. After "
+                      "clicking this button click an Image Texture node "
+                      "in the node editor to use its image")
+
+    @classmethod
+    def poll(cls, context):
+        space = getattr(context, "space_data", None)
+        return space is not None and space.type == 'NODE_EDITOR'
+
+    def invoke(self, context, event):
+        baker_node = self.get_baker_node(context)
+        if baker_node is None:
+            return {'CANCELLED'}
+
+        editor = self._get_node_editor(context)
+        if editor is None:
+            self.report({'ERROR'}, "Could not find a node editor region")
+            return {'CANCELLED'}
+
+        window, area, region, space = editor
+        if space.edit_tree is None:
+            self.report({'ERROR'}, "The node editor is not editing "
+                                   "a node tree")
+            return {'CANCELLED'}
+
+        self._baker_node = baker_node
+        self._window = window
+        self._area = area
+        self._region = region
+        self._space = space
+        self._node_tree = space.edit_tree
+
+        context.window.cursor_modal_set('EYEDROPPER')
+        context.window_manager.modal_handler_add(self)
+        return {'RUNNING_MODAL'}
+
+    def modal(self, context, event):
+        if event.type in {'ESC', 'RIGHTMOUSE'}:
+            self._restore_cursor(context)
+            return {'CANCELLED'}
+
+        if event.type == 'LEFTMOUSE' and event.value == 'PRESS':
+            self._pick(context, event.mouse_region_x, event.mouse_region_y)
+            self._restore_cursor(context)
+            return {'FINISHED'}
+
+        return {'RUNNING_MODAL'}
+
+    def _get_node_editor(self, context):
+        """Returns a (window, area, region, space_data) tuple for a node
+        editor in the current window or None if there is none.
+        """
+        area = getattr(context, "area", None)
+        if area is None or area.type != 'NODE_EDITOR':
+            area = next((x for x in context.window.screen.areas
+                         if x.type == 'NODE_EDITOR'), None)
+        if area is None:
+            return None
+
+        region = next((x for x in area.regions if x.type == 'WINDOW'), None)
+        space = next((x for x in area.spaces if x.type == 'NODE_EDITOR'),
+                     None)
+        if region is None or space is None:
+            return None
+        return context.window, area, region, space
+
+    def _pick(self, context, mouse_x, mouse_y) -> None:
+        """Sets the target image of this operator's BakerNode to the image
+        of the Image Texture node under the position (mouse_x, mouse_y)
+        which should be relative to the node editor's region.
+        """
+        caller = utils.OpCaller(context, window=self._window, area=self._area,
+                                region=self._region, space_data=self._space)
+
+        # Select (and make active) the node under the mouse location
+        caller.call("node.select", location=(mouse_x, mouse_y))
+
+        node = self._node_tree.nodes.active
+        if node is None:
+            return
+        if node.bl_idname != 'ShaderNodeTexImage':
+            self.report({'WARNING'}, "The clicked node is not an "
+                                     "Image Texture node")
+            return
+        if node.image is None:
+            self.report({'WARNING'}, "The clicked Image Texture node has no "
+                                     "image")
+            return
+
+        self._baker_node.target_image = node.image
+
+    @staticmethod
+    def _restore_cursor(context) -> None:
+        context.window.cursor_modal_restore()
+
+
 class BKN_OT_add_masking_setup(Operator):
     bl_idname = "node.bkn_masking_setup"
     bl_label = "Add Masking Setup"
@@ -427,6 +526,7 @@ classes = (BKN_OT_bake_button,
            BKN_OT_mute_all_toggle,
            BKN_OT_to_builtin,
            BKN_OT_refresh_preview,
+           BKN_OT_pick_image_node,
            BKN_OT_add_masking_setup,
            BKN_OT_to_tangent_space_setup,
            )
