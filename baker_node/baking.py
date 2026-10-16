@@ -589,7 +589,7 @@ class _BakerNodeBaker:
         cycles_props.use_denoising = False
 
         bake_props.target = self._cycles_target_enum
-        bake_props.use_clear = True
+        bake_props.use_clear = False
         # bake_props.use_selected_to_active = False  # TODO ???
 
         if self.frame is not None:
